@@ -4,21 +4,28 @@
   text-align: center;
   padding: 2rem;
   font-family: sans-serif;
-  background-color: #f9f9f9;
+  background-color: #131313;
   min-height: 100vh;
 }
 
 h1 {
-  color: #2c3e50;
-  font-size: 2.5rem;
+  font-size: 4.5rem;
+  margin-bottom: 2rem;
+  background: -webkit-linear-gradient(#598fe7, #3374be);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+p {
+  color: #4b81d6;
+  font-size: 1.3rem;
   margin-bottom: 2rem;
 }
 
 .fileBox {
-  border: 3px dashed #bbb;
-  padding: 2rem;
+  border: 3px dashed #4b81d6;
+  padding: 3rem;
   border-radius: 12px;
-  background-color: #ffffff;
   width: 60%;
   max-width: 500px;
   margin: 0 auto;
@@ -27,7 +34,7 @@ h1 {
 }
 
 .fileBox:hover {
-  border-color: #4a90e2;
+  border-color: #649fff;
 }
 
 .fileInput {
@@ -49,15 +56,15 @@ h1 {
   margin-left: auto;
   margin-right: auto;
   text-align: left;
-  background-color: #fff;
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 2px solid #4b81d6;
 }
 
 .fileList h3 {
   margin-bottom: 0.5rem;
-  color: #333;
+  color: #4b81d6;
 }
 
 .fileItem {
@@ -71,7 +78,7 @@ h1 {
   border-bottom: none;
 }
 
-.rbtn{
+.btn{
   margin-top:20px;
   font-size: 1.3em;
   font-family: "Source Sans Pro", sans-serif;
@@ -80,17 +87,23 @@ h1 {
   width: 200px;
   font-weight: bold;
   padding: 10px;
-  color: #000000;
   background-color: transparent; 
-  border: 4px solid #ed1717;
   text-align: center;
   outline: none;
   text-decoration: none;
-  transition: background-color 0.2s ease-out, color 0.2s ease-out;
-  border-radius: 25px;
+  transition: background-color 0.1s ease-out, color 0.1s ease-out;
+  border-radius: 15px;
 }
-.rbtn:hover{
-  background-color: #000000;
-  color: #e21313;
-  transition: background-color 0.3s ease-in, color 0.3s ease-in;
+.btn:hover{
+    background-color: #3d3d3d;
+}
+
+.btn--r{
+  color: #a54141;
+  border: 2px solid #a54141;
+}
+
+.btn--c{
+  color: #4b97d6;
+  border: 2px solid #4b97d6;
 }

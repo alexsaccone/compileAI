@@ -30,15 +30,21 @@ function App() {
     setFiles([])
   }
 
+  const compileFiles = () => {
+  
+  }
+
 
   return (
     <div className="App">
-      <h1> CompileAI </h1>
+      <h1>CompileAI</h1>
+      <p>Your tool for efficiently combining databases.</p>
       <div className = "fileBox">
         <input className = "fileInput" type="file" multiple ref={fileInputRef} onChange={(e) => handleFiles(e.target.files)}/>
         <p className = "errorMessage"> {errorMessage} </p>
       </div>
-      <button className = "rbtn" onClick = {resetFiles}> Reset </button>
+      <button className = "btn btn--c" onClick = {compileFiles}> Compile </button> &nbsp;
+      <button className = "btn btn--r" onClick = {resetFiles}> Reset </button>
       {files && (
         <>
           <div className = "fileList">
