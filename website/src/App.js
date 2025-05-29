@@ -1,8 +1,7 @@
 import logo from './logo.svg';
 import './App.css';
-
 import React, {useState, useRef} from 'react'
-
+import Upload from "./Upload.jsx"
 
 function App() {
   const [files, setFiles] = useState([])
@@ -18,7 +17,7 @@ function App() {
       if(type != "text/csv" && type != "application/sql") {
         console.log(type)
         goodCondition = false
-        setErrorMessage("One of your files is not a supported data type")
+        setErrorMessage("One of your files is not a supported data type.")
       }
     })
     if (goodCondition) {
@@ -39,12 +38,10 @@ function App() {
     <div className="App">
       <h1>CompileAI</h1>
       <p>Your tool for efficiently combining databases.</p>
-      <div className = "fileBox">
-        <input className = "fileInput" type="file" multiple ref={fileInputRef} onChange={(e) => handleFiles(e.target.files)}/>
-        <p className = "errorMessage"> {errorMessage} </p>
-      </div>
-      <button className = "btn btn--c" onClick = {compileFiles}> Compile </button> &nbsp;
-      <button className = "btn btn--r" onClick = {resetFiles}> Reset </button>
+      <Upload onFilesSelected={handleFiles}/><br></br>
+      <button className = "btn btn--c" onClick = {compileFiles}>Compile</button> &nbsp;
+      <button className = "btn btn--r" onClick = {resetFiles}>Reset</button>
+      <p className = "errorMessage"> {errorMessage} </p>
       {files && (
         <>
           <div className = "fileList">
