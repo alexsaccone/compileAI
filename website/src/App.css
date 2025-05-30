@@ -14,6 +14,7 @@ h1 {
   margin-bottom: 2rem;
   background: -webkit-linear-gradient(#6597e7, #265994);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
