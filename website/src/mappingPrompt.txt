@@ -1,0 +1,5 @@
+This is a collection of databases with all columns and some sample values included. These files should be mapped into one database while maintaining consistency and serve the purpose of the original databases.
+
+Your output should ONLY be a JSON object in a parsable string that includes the "unified_schema" of the new database, which includes only "name" and "type", and how each file's columns should be mapped to the unified schema, which be called "mappings".
+
+You should analyze which columns are functionally identical to one another and have only one column in the unified_schema for them. If data in a column can be calculated from data in other columns, account for this an treat files who might be mising columns as if they're there.
