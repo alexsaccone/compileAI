@@ -58,11 +58,20 @@ function App() {
     setSelectedColumns({})
   }
 
+  /*
+  Desired behavior:
+  - Read all uploaded files and extract all unique columns
+  - Open popup with all unique columns
+  - User can select which columns to include in the output
+  - User can download the output as a CSV file (or other supported format)
+  - Alternatively, user can attempt to compile files with as much data as possible, only including columns that have data in every file
+  */
   const compileFiles = () => {
     if (files.length > 0) {
       // Read all CSV files and extract columns
       const csvFiles = files.filter(file => file.type === "text/csv")
       const allColumns = new Set()
+      const fileData = []
       
       csvFiles.forEach(file => {
         Papa.parse(file, {
@@ -70,6 +79,21 @@ function App() {
           complete: (results) => {
             const fileColumns = results.meta.fields || []
             fileColumns.forEach(col => allColumns.add(col))
+            
+            // Create JSON representation for this file
+            const fileJson = {
+              fileName: file.name,
+              columns: fileColumns.map(columnName => {
+                const sampleValue = results.data.length > 0 ? results.data[0][columnName] : null
+                return {
+                  name: columnName,
+                  sampleValue: sampleValue
+                }
+              })
+            }
+            fileData.push(fileJson)
+            
+            // Update state with all unique columns
             setColumns(Array.from(allColumns))
             // Initialize selected columns
             const newSelectedColumns = {}
@@ -77,6 +101,9 @@ function App() {
               newSelectedColumns[col] = true
             })
             setSelectedColumns(newSelectedColumns)
+            
+            // Log the JSON representation [FOR TESTING PURPOSES]
+            console.log(JSON.stringify(fileJson, null, 2))
           }
         })
       })
