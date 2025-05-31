@@ -151,20 +151,34 @@ function App() {
         <div className="popup-overlay"> 
           <div className="popup-content" ref={popupRef}>
             <h2>Compilation Options</h2>
-            <div className="columns-container">
-              <h3>Select Columns to Include:</h3>
-              <div className="columns-list">
-                {columns.map((column, index) => (
-                  <div key={index} className="column-item">
-                    <input
-                      type="checkbox"
-                      id={`column-${index}`}
-                      checked={selectedColumns[column]}
-                      onChange={() => handleColumnToggle(column)}
-                    />
-                    <label htmlFor={`column-${index}`}>{column}</label>
+            <div className="compilation-options-container">
+              <div className="compilation-option">
+                <h3>Select Columns</h3>
+                
+                <div className="columns-container">
+                  <div className="columns-list">
+                    {columns.map((column, index) => (
+                      <div key={index} className="column-item">
+                        <input
+                          type="checkbox"
+                          id={`column-${index}`}
+                          checked={selectedColumns[column]}
+                          onChange={() => handleColumnToggle(column)}
+                        />
+                        <label htmlFor={`column-${index}`}>{column}</label>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <button className="btn btn--download" onClick={() => {/* TODO: Implement maximal data download */}}>
+                  <i class="bi bi-download h2"></i> Download</button>
+              </div>
+              <div className="compilation-divider"></div>
+              <div className="compilation-option">
+                <h3>Use Maximal Data</h3>
+                <p>Download a file containing all data from all CSV files, including only columns that have data in every file.</p>
+                <button className="btn btn--download" onClick={() => {/* TODO: Implement maximal data download */}}>
+                  <i class="bi bi-download h2"></i> Download</button>
               </div>
             </div>
           </div>
