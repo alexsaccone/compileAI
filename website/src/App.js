@@ -3,7 +3,7 @@ import './App.css';
 import React, {useState, useRef, useEffect} from 'react'
 import Upload from "./Upload.jsx"
 import Papa from 'papaparse'
-import { GoogleGenAI } from "@google/genai"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
 function App() {
   const [files, setFiles] = useState([])
@@ -13,7 +13,7 @@ function App() {
   const fileInputRef = useRef(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const popupRef = useRef(null);
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const genAI = new GoogleGenerativeAI(process.env.REACT_APP_API_KEY);
 
   useEffect(() => {
     const handleEscapeKey = (event) => {
@@ -115,6 +115,8 @@ function App() {
     }
   }
 
+  
+
   const closePopup = () => {
     setIsPopupOpen(false)
   }
@@ -124,6 +126,99 @@ function App() {
       ...prev,
       [column]: !prev[column]
     }))
+
+  }
+
+  const mergeAndDownloadCSV = async () => {
+    const csvFiles = files.filter(file => file.type === "text/csv")
+    const mergedData = []
+    
+    // First, get all column mappings from each file
+    const columnMappings = await Promise.all(csvFiles.map(async file => {
+      return new Promise((resolve) => {
+        Papa.parse(file, {
+          header: true,
+          complete: async (results) => {
+            const fileColumns = results.meta.fields || []
+            // Get sample data for each column
+            const columnSamples = fileColumns.map(col => ({
+              name: col,
+              sample: results.data.length > 0 ? results.data[0][col] : null
+            }))
+            
+            // Use Gemini to analyze column similarities
+            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+            const prompt = `Given databases with columns and sample values, merge them into one consistent schema. Output only a JSON string with a "unified_schema" (with "name" and "type") and "mappings". In "mappings", each entry should use the filename as the key, and map original column names to unified names as { original: unified }. Treat functionally identical or derivable columns as one, even if missing in some files.`;
+            
+            try {
+              const result = await model.generateContent(prompt);
+              const response = await result.response;
+              const responseText = response.text();
+              console.log('Gemini Response:', responseText); // Log the raw response
+              
+              let mapping;
+              try {
+                mapping = JSON.parse(responseText);
+                // Validate the mapping structure
+                if (!mapping.unified_schema || !mapping.mappings) {
+                  throw new Error('Invalid mapping structure');
+                }
+                console.log('Parsed Mapping:', mapping); // Log the parsed mapping
+              } catch (parseError) {
+                console.error('Error parsing Gemini response:', parseError);
+                console.error('Raw response:', responseText);
+                setErrorMessage('Error processing column mappings. Please try again.');
+                return;
+              }
+              
+              resolve({ file, mapping, data: results.data });
+            } catch (error) {
+              console.error('Error getting column mappings:', error);
+              setErrorMessage('Error communicating with AI. Please try again.');
+              resolve({ file, mapping: {}, data: results.data });
+            }
+          }
+        })
+      })
+    }))
+
+    // Validate that we have valid mappings before proceeding
+    const hasValidMappings = columnMappings.every(({ mapping }) => 
+      mapping && mapping.unified_schema && mapping.mappings
+    );
+
+    if (!hasValidMappings) {
+      setErrorMessage('Failed to generate valid column mappings. Please try again.');
+      return;
+    }
+
+    // Process all files with their mappings
+    const processedData = columnMappings.map(({ mapping, data }) => {
+      return data.map(row => {
+        const newRow = {}
+        Object.entries(mapping.mappings).forEach(([oldCol, newCol]) => {
+          if (selectedColumns[newCol]) {
+            newRow[newCol] = row[oldCol] || ''
+          }
+        })
+        return newRow
+      })
+    })
+
+    // Combine all the processed data
+    const allData = processedData.flat()
+    
+    // Create and download the CSV
+    const csv = Papa.unparse(allData)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', 'merged_data.csv')
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   return (
@@ -172,8 +267,8 @@ function App() {
                     ))}
                   </div>
                 </div>
-                <button className="btn btn--download" onClick={() => {/* TODO: Implement maximal data download */}}>
-                  <i class="bi bi-download h2"></i> Download</button>
+                <button className="btn btn--download" onClick={mergeAndDownloadCSV}>
+                  <i className="bi bi-download h2"></i> Download</button>
               </div>
               <div className="compilation-divider"></div>
               <div className="compilation-option">
