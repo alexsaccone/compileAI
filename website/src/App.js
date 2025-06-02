@@ -3,6 +3,7 @@ import './App.css';
 import React, {useState, useRef, useEffect} from 'react'
 import Upload from "./Upload.jsx"
 import Papa from 'papaparse'
+import { GoogleGenAI } from "@google/genai"
 
 function App() {
   const [files, setFiles] = useState([])
@@ -12,6 +13,7 @@ function App() {
   const fileInputRef = useRef(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const popupRef = useRef(null);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   useEffect(() => {
     const handleEscapeKey = (event) => {
