@@ -148,7 +148,9 @@ function App() {
             
             // Use Gemini to analyze column similarities
             const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-            const prompt = `Given databases with columns and sample values, merge them into one consistent schema. Output only a JSON string with a "unified_schema" (with "name" and "type") and "mappings". In "mappings", each entry should use the filename as the key, and map original column names to unified names as { original: unified }. Treat functionally identical or derivable columns as one, even if missing in some files.`;
+            const prompt = `Given these database columns and sample values:
+              ${JSON.stringify(columnSamples, null, 2)}
+              Merge them into one consistent schema. Output only a JSON string with a "unified_schema" (with "name" and "type") and "mappings". In "mappings", each entry should use the filename as the key, and map original column names to unified names as { original: unified }. Treat functionally identical or derivable columns as one, even if missing in some files.`;
             
             try {
               const result = await model.generateContent(prompt);
@@ -174,7 +176,7 @@ function App() {
               resolve({ file, mapping, data: results.data });
             } catch (error) {
               console.error('Error getting column mappings:', error);
-              setErrorMessage('Error communicating with AI. Please try again.');
+              setErrorMessage('Error communicating with AI. Please check your API key configuration.');
               resolve({ file, mapping: {}, data: results.data });
             }
           }
@@ -275,7 +277,7 @@ function App() {
                 <h3>Use Maximal Data</h3>
                 <p>Download a file containing all data from all CSV files, including only columns that have data in every file.</p>
                 <button className="btn btn--download" onClick={() => {/* TODO: Implement maximal data download */}}>
-                  <i class="bi bi-download h2"></i> Download</button>
+                  <i className="bi bi-download h2"></i> Download</button>
               </div>
             </div>
           </div>
