@@ -13,7 +13,6 @@ function App() {
   const fileInputRef = useRef(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const popupRef = useRef(null);
-  console.log(process.env.REACT_APP_API_KEY)
   const genAI = new GoogleGenAI({ apiKey: process.env.REACT_APP_API_KEY });
 
 
@@ -149,14 +148,17 @@ function App() {
             }))
             
             // Use Gemini to analyze column similarities
+            const model = "gemini-2.5-flash";
             const prompt = `Given these database columns and sample values:
               ${JSON.stringify(columnSamples, null, 2)}
               Merge them into one consistent schema. Output only a JSON string with a "unified_schema" (with "name" and "type") and "mappings". In "mappings", each entry should use the filename as the key, and map original column names to unified names as { original: unified }. Treat functionally identical or derivable columns as one, even if missing in some files.`;
             
             try {
-              const result = await model.generateContent(prompt);
-              const response = await result.response;
-              const responseText = response.text();
+              const result = await genAI.models.generateContent({
+                model: model,
+                contents: prompt,
+            });
+              const responseText = result.text;
               console.log('Gemini Response:', responseText); // Log the raw response
               
               let mapping;
