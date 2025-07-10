@@ -3,7 +3,7 @@ import './App.css';
 import React, {useState, useRef, useEffect} from 'react'
 import Upload from "./Upload.jsx"
 import Papa from 'papaparse'
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GoogleGenAI } from "@google/genai"
 
 function App() {
   const [files, setFiles] = useState([])
@@ -13,7 +13,9 @@ function App() {
   const fileInputRef = useRef(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const popupRef = useRef(null);
-  const genAI = new GoogleGenerativeAI(process.env.REACT_APP_API_KEY);
+  console.log(process.env.REACT_APP_API_KEY)
+  const genAI = new GoogleGenAI({ apiKey: process.env.REACT_APP_API_KEY });
+
 
   useEffect(() => {
     const handleEscapeKey = (event) => {
@@ -147,7 +149,6 @@ function App() {
             }))
             
             // Use Gemini to analyze column similarities
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
             const prompt = `Given these database columns and sample values:
               ${JSON.stringify(columnSamples, null, 2)}
               Merge them into one consistent schema. Output only a JSON string with a "unified_schema" (with "name" and "type") and "mappings". In "mappings", each entry should use the filename as the key, and map original column names to unified names as { original: unified }. Treat functionally identical or derivable columns as one, even if missing in some files.`;
