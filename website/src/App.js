@@ -129,12 +129,12 @@ function App() {
     const csvFiles = files.filter(file => file.type === "text/csv")
     const mergedData = []
     
-    // First, get all column mappings from each file
-    const columnMappings = await Promise.all(csvFiles.map(async file => {
+    // First, parse all CSV files and collect their data
+    const allFileData = await Promise.all(csvFiles.map(file => {
       return new Promise((resolve) => {
         Papa.parse(file, {
           header: true,
-          complete: async (results) => {
+          complete: (results) => {
             const fileColumns = results.meta.fields || []
             // Get sample data for each column
             const columnSamples = fileColumns.map(col => ({
@@ -142,90 +142,96 @@ function App() {
               sample: results.data.length > 0 ? results.data[0][col] : null
             }))
             
-            // Use Gemini to analyze column similarities
-            const model = "gemini-2.5-flash";
-            const prompt = `Given these database columns and sample values:
-              ${JSON.stringify(columnSamples, null, 2)}
-              Merge them into one consistent schema. Output only a JSON string with a "unified_schema" (with "name" and "type") and "mappings". In "mappings", each entry should use the filename as the key, and map original column names to unified names as { original: unified }. Treat functionally identical or derivable columns as one, even if missing in some files.`;
-            
-            try {
-              const result = await genAI.models.generateContent({
-                model: model,
-                contents: prompt,
+            resolve({
+              fileName: file.name,
+              columns: columnSamples,
+              data: results.data
             });
-              const responseText = result.text;
-              console.log('Gemini Response:', responseText); // Log the raw response
-              const cleanText = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim()
-              console.log(cleanText)
-              
-              let mapping;
-              try {
-                mapping = JSON.parse(cleanText);
-                // Validate the mapping structure
-                if (!mapping.unified_schema || !mapping.mappings) {
-                  throw new Error('Invalid mapping structure');
-                }
-                console.log('Parsed Mapping:', mapping); // Log the parsed mapping
-              } catch (parseError) {
-                console.error('Error parsing Gemini response:', parseError);
-                console.error('Raw response:', cleanText);
-                setErrorMessage('Error processing column mappings. Please try again.');
-                return;
-              }
-              
-              resolve({ file, mapping, data: results.data });
-            } catch (error) {
-              console.error('Error getting column mappings:', error);
-              setErrorMessage('Error communicating with AI. Please check your API key configuration.');
-              resolve({ file, mapping: {}, data: results.data });
-            }
           }
         })
       })
     }))
 
-    // Validate that we have valid mappings before proceeding
-    const hasValidMappings = columnMappings.every(({ mapping }) => 
-      mapping && mapping.unified_schema && mapping.mappings
-    );
+    // Prepare data for single Gemini API call
+    const allColumnsData = allFileData.map(fileData => ({
+      fileName: fileData.fileName,
+      columns: fileData.columns
+    }));
 
-    if (!hasValidMappings) {
-      setErrorMessage('Failed to generate valid column mappings. Please try again.');
-      return;
-    }
+    // Make single API call to Gemini with all file data
+    const model = "gemini-2.5-flash";
+    const prompt = `Given these multiple CSV files with their columns and sample values:
+      ${JSON.stringify(allColumnsData, null, 2)}
+      
+      Create a unified schema that merges all these files. Output only a JSON string with:
+      1. "unified_schema": Array of unified column names and types
+      2. "mappings": Object where each key is a filename, and the value maps original column names to unified names as { "original": "unified" }
+      
+      Treat functionally identical or derivable columns as one, even if missing in some files. Ensure the unified schema covers all selected columns.`;
 
-    // Process all files with their mappings
-    const processedData = columnMappings.map(({ mapping, data, file }) => {
-      return data.map(row => {
-        const newRow = {}
-        // Get the file-specific mapping for this file
-        const fileMapping = mapping.mappings[file.name] || mapping.mappings
-        
-        // Apply the mapping to transform column names
-        Object.entries(fileMapping).forEach(([oldCol, newCol]) => {
-          if (selectedColumns[newCol]) {
-            newRow[newCol] = row[oldCol] || ''
-          }
+    try {
+      const result = await genAI.models.generateContent({
+        model: model,
+        contents: prompt,
+      });
+      
+      const responseText = result.text;
+      console.log('Gemini Response:', responseText);
+      const cleanText = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim()
+      console.log('Cleaned response:', cleanText)
+      
+      let unifiedMapping;
+      try {
+        unifiedMapping = JSON.parse(cleanText);
+        // Validate the mapping structure
+        if (!unifiedMapping.unified_schema || !unifiedMapping.mappings) {
+          throw new Error('Invalid mapping structure');
+        }
+        console.log('Parsed Unified Mapping:', unifiedMapping);
+      } catch (parseError) {
+        console.error('Error parsing Gemini response:', parseError);
+        console.error('Raw response:', cleanText);
+        setErrorMessage('Error processing column mappings. Please try again.');
+        return;
+      }
+
+      // Process all files with the unified mapping
+      const processedData = allFileData.map(fileData => {
+        return fileData.data.map(row => {
+          const newRow = {}
+          // Get the file-specific mapping for this file
+          const fileMapping = unifiedMapping.mappings[fileData.fileName] || {}
+          
+          // Apply the mapping to transform column names
+          Object.entries(fileMapping).forEach(([oldCol, newCol]) => {
+            if (selectedColumns[newCol]) {
+              newRow[newCol] = row[oldCol] || ''
+            }
+          })
+          return newRow
         })
-        return newRow
       })
-    })
 
-    // Combine all the processed data
-    const allData = processedData.flat()
-    console.log(allData)
-    
-    // Create and download the CSV
-    const csv = Papa.unparse(allData)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', 'merged_data.csv')
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+      // Combine all the processed data
+      const allData = processedData.flat()
+      console.log('Final merged data:', allData)
+      
+      // Create and download the CSV
+      const csv = Papa.unparse(allData)
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', 'merged_data.csv')
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+    } catch (error) {
+      console.error('Error getting unified column mappings:', error);
+      setErrorMessage('Error communicating with AI. Please check your API key configuration.');
+    }
   }
 
   return (
