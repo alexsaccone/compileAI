@@ -71,50 +71,45 @@ function App() {
   */
   const compileFiles = () => {
     if (files.length > 0) {
-      // Read all CSV files and extract columns
-      const csvFiles = files.filter(file => file.type === "text/csv")
-      const allColumns = new Set()
-      const fileData = []
-      
-      csvFiles.forEach(file => {
-        Papa.parse(file, {
-          header: true,
-          complete: (results) => {
-            const fileColumns = results.meta.fields || []
-            fileColumns.forEach(col => allColumns.add(col))
-            
-            // Create JSON representation for this file
-            const fileJson = {
-              fileName: file.name,
-              columns: fileColumns.map(columnName => {
-                const sampleValue = results.data.length > 0 ? results.data[0][columnName] : null
-                return {
+      const csvFiles = files.filter(file => file.type === "text/csv");
+      const allColumns = new Set();
+      const fileData = [];
+
+      // Use Promise.all to wait for all files to be parsed
+      Promise.all(csvFiles.map(file => {
+        return new Promise((resolve) => {
+          Papa.parse(file, {
+            header: true,
+            complete: (results) => {
+              const fileColumns = results.meta.fields || [];
+              fileColumns.forEach(col => allColumns.add(col));
+              fileData.push({
+                fileName: file.name,
+                columns: fileColumns.map(columnName => ({
                   name: columnName,
-                  sampleValue: sampleValue
-                }
-              })
+                  sampleValue: results.data.length > 0 ? results.data[0][columnName] : null
+                }))
+              });
+              resolve();
             }
-            fileData.push(fileJson)
-            
-            // Update state with all unique columns
-            setColumns(Array.from(allColumns))
-            // Initialize selected columns
-            const newSelectedColumns = {}
-            Array.from(allColumns).forEach(col => {
-              newSelectedColumns[col] = true
-            })
-            setSelectedColumns(newSelectedColumns)
-            
-            // Log the JSON representation [FOR TESTING PURPOSES]
-            console.log(JSON.stringify(fileJson, null, 2))
-          }
-        })
-      })
-      setIsPopupOpen(true)
+          });
+        });
+      })).then(() => {
+        setColumns(Array.from(allColumns));
+        const newSelectedColumns = {};
+        Array.from(allColumns).forEach(col => {
+          newSelectedColumns[col] = true;
+        });
+        setSelectedColumns(newSelectedColumns);
+        setIsPopupOpen(true);
+        // Log for debugging
+        console.log("All columns:", Array.from(allColumns));
+        console.log("File data:", fileData);
+      });
     } else {
-      setErrorMessage("Please upload files before compiling.")
+      setErrorMessage("Please upload files before compiling.");
     }
-  }
+  };
 
   
 
@@ -160,10 +155,12 @@ function App() {
             });
               const responseText = result.text;
               console.log('Gemini Response:', responseText); // Log the raw response
+              const cleanText = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim()
+              console.log(cleanText)
               
               let mapping;
               try {
-                mapping = JSON.parse(responseText);
+                mapping = JSON.parse(cleanText);
                 // Validate the mapping structure
                 if (!mapping.unified_schema || !mapping.mappings) {
                   throw new Error('Invalid mapping structure');
@@ -171,7 +168,7 @@ function App() {
                 console.log('Parsed Mapping:', mapping); // Log the parsed mapping
               } catch (parseError) {
                 console.error('Error parsing Gemini response:', parseError);
-                console.error('Raw response:', responseText);
+                console.error('Raw response:', cleanText);
                 setErrorMessage('Error processing column mappings. Please try again.');
                 return;
               }
@@ -198,10 +195,14 @@ function App() {
     }
 
     // Process all files with their mappings
-    const processedData = columnMappings.map(({ mapping, data }) => {
+    const processedData = columnMappings.map(({ mapping, data, file }) => {
       return data.map(row => {
         const newRow = {}
-        Object.entries(mapping.mappings).forEach(([oldCol, newCol]) => {
+        // Get the file-specific mapping for this file
+        const fileMapping = mapping.mappings[file.name] || mapping.mappings
+        
+        // Apply the mapping to transform column names
+        Object.entries(fileMapping).forEach(([oldCol, newCol]) => {
           if (selectedColumns[newCol]) {
             newRow[newCol] = row[oldCol] || ''
           }
@@ -212,6 +213,7 @@ function App() {
 
     // Combine all the processed data
     const allData = processedData.flat()
+    console.log(allData)
     
     // Create and download the CSV
     const csv = Papa.unparse(allData)
