@@ -188,6 +188,15 @@ function App() {
           throw new Error('Invalid mapping structure');
         }
         console.log('Parsed Unified Mapping:', unifiedMapping);
+        
+        // Create a reverse mapping from unified names back to original names
+        const reverseMapping = {};
+        Object.entries(unifiedMapping.mappings).forEach(([fileName, mapping]) => {
+          Object.entries(mapping).forEach(([originalCol, unifiedCol]) => {
+            reverseMapping[unifiedCol] = originalCol;
+          });
+        });
+        
       } catch (parseError) {
         console.error('Error parsing Gemini response:', parseError);
         console.error('Raw response:', cleanText);
@@ -204,7 +213,8 @@ function App() {
           
           // Apply the mapping to transform column names
           Object.entries(fileMapping).forEach(([oldCol, newCol]) => {
-            if (selectedColumns[newCol]) {
+            // Check if the original column is selected
+            if (selectedColumns[oldCol]) {
               newRow[newCol] = row[oldCol] || ''
             }
           })
