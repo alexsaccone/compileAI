@@ -1,12 +1,15 @@
-Bootstrapped with create-react-app.
-
 Quick tutorial to run:
-cd website
-npm start
 
-Create a .env file in the root directory and input any missing API keys
+1) Create a .env file in the website folder containing only the following line:
+
+  REACT_APP_API_KEY={ your Gemini API key }
+
+2) Navigate to the directory where the repository is located locally in the command line and enter the following commands:
+
+  cd website
+  npm start
+
+
 
 TODO:
-Dependencies to parse and handle csv, sql and maybe mongodb
-Begin setting up openai API
-Make website actually look good
+Add support for SQL, mongodb
