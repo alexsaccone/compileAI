@@ -69,43 +69,98 @@ function App() {
   - User can download the output as a CSV file (or other supported format)
   - Alternatively, user can attempt to compile files with as much data as possible, only including columns that have data in every file
   */
-  const compileFiles = () => {
+  const compileFiles = async () => {
     if (files.length > 0) {
       const csvFiles = files.filter(file => file.type === "text/csv");
-      const allColumns = new Set();
-      const fileData = [];
-
-      // Use Promise.all to wait for all files to be parsed
-      Promise.all(csvFiles.map(file => {
+      
+      // First, parse all CSV files and collect their data
+      const allFileData = await Promise.all(csvFiles.map(file => {
         return new Promise((resolve) => {
           Papa.parse(file, {
             header: true,
             complete: (results) => {
               const fileColumns = results.meta.fields || [];
-              fileColumns.forEach(col => allColumns.add(col));
-              fileData.push({
+              // Get sample data for each column
+              const columnSamples = fileColumns.map(col => ({
+                name: col,
+                sample: results.data.length > 0 ? results.data[0][col] : null
+              }))
+              
+              resolve({
                 fileName: file.name,
-                columns: fileColumns.map(columnName => ({
-                  name: columnName,
-                  sampleValue: results.data.length > 0 ? results.data[0][columnName] : null
-                }))
+                columns: columnSamples,
+                data: results.data
               });
-              resolve();
             }
           });
         });
-      })).then(() => {
-        setColumns(Array.from(allColumns));
+      }));
+
+      // Prepare data for single Gemini API call
+      const allColumnsData = allFileData.map(fileData => ({
+        fileName: fileData.fileName,
+        columns: fileData.columns
+      }));
+
+      // Make single API call to Gemini with all file data
+      const model = "gemini-2.5-flash";
+      const prompt = `Given these multiple CSV files with their columns and sample values:
+        ${JSON.stringify(allColumnsData, null, 2)}
+        
+        Create a unified schema that merges all these files. Output only a JSON string with:
+        1. "unified_schema": Array of unified column names and types
+        2. "mappings": Object where each key is a filename, and the value maps original column names to unified names as { "original": "unified" }
+        
+        Treat functionally identical or derivable columns as one, even if missing in some files. Ensure the unified schema covers all selected columns.`;
+
+      try {
+        const result = await genAI.models.generateContent({
+          model: model,
+          contents: prompt,
+        });
+        
+        const responseText = result.text;
+        console.log('Gemini Compile Response:', responseText);
+        const cleanText = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim()
+        console.log('Cleaned compile response:', cleanText)
+        
+        let unifiedMapping;
+        try {
+          unifiedMapping = JSON.parse(cleanText);
+          // Validate the mapping structure
+          if (!unifiedMapping.unified_schema || !unifiedMapping.mappings) {
+            throw new Error('Invalid mapping structure');
+          }
+          console.log('Parsed Compile Unified Mapping:', unifiedMapping);
+        } catch (parseError) {
+          console.error('Error parsing Gemini response:', parseError);
+          console.error('Raw response:', cleanText);
+          setErrorMessage('Error processing column mappings. Please try again.');
+          return;
+        }
+
+        // Get unified column names and set them as the displayed columns
+        const unifiedColumnNames = unifiedMapping.unified_schema.map(col => col.name || col);
+        setColumns(unifiedColumnNames);
+        
+        // Initialize selectedColumns with all unified columns selected
         const newSelectedColumns = {};
-        Array.from(allColumns).forEach(col => {
+        unifiedColumnNames.forEach(col => {
           newSelectedColumns[col] = true;
         });
         setSelectedColumns(newSelectedColumns);
+        
+        // Store the unified mapping for use in download functions
+        window.unifiedMapping = unifiedMapping;
+        
         setIsPopupOpen(true);
-        // Log for debugging
-        console.log("All columns:", Array.from(allColumns));
-        console.log("File data:", fileData);
-      });
+        console.log("Unified columns:", unifiedColumnNames);
+        console.log("Unified mapping stored:", unifiedMapping);
+        
+      } catch (error) {
+        console.error('Error getting unified column mappings for compile:', error);
+        setErrorMessage('Error communicating with AI. Please check your API key configuration.');
+      }
     } else {
       setErrorMessage("Please upload files before compiling.");
     }
@@ -126,89 +181,35 @@ function App() {
   }
 
   const mergeAndDownloadCSV = async () => {
+    // Use the unified mapping that was created during compile
+    const unifiedMapping = window.unifiedMapping;
+    if (!unifiedMapping) {
+      setErrorMessage('Please compile files first to generate unified schema.');
+      return;
+    }
+
     const csvFiles = files.filter(file => file.type === "text/csv")
-    const mergedData = []
     
-    // First, parse all CSV files and collect their data
+    // Parse all CSV files and collect their data
     const allFileData = await Promise.all(csvFiles.map(file => {
       return new Promise((resolve) => {
         Papa.parse(file, {
           header: true,
           complete: (results) => {
-            const fileColumns = results.meta.fields || []
-            // Get sample data for each column
-            const columnSamples = fileColumns.map(col => ({
-              name: col,
-              sample: results.data.length > 0 ? results.data[0][col] : null
-            }))
-            
             resolve({
               fileName: file.name,
-              columns: columnSamples,
               data: results.data
             });
           }
         })
       })
-    }))
-
-    // Prepare data for single Gemini API call
-    const allColumnsData = allFileData.map(fileData => ({
-      fileName: fileData.fileName,
-      columns: fileData.columns
-    }));
-
-    // Make single API call to Gemini with all file data
-    const model = "gemini-2.5-flash";
-    const prompt = `Given these multiple CSV files with their columns and sample values:
-      ${JSON.stringify(allColumnsData, null, 2)}
-      
-      Create a unified schema that merges all these files. Output only a JSON string with:
-      1. "unified_schema": Array of unified column names and types
-      2. "mappings": Object where each key is a filename, and the value maps original column names to unified names as { "original": "unified" }
-      
-      Treat functionally identical or derivable columns as one, even if missing in some files. Ensure the unified schema covers all selected columns.`;
-
-    try {
-      const result = await genAI.models.generateContent({
-        model: model,
-        contents: prompt,
-      });
-      
-      const responseText = result.text;
-      console.log('Gemini Response:', responseText);
-      const cleanText = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim()
-      console.log('Cleaned response:', cleanText)
-      
-      let unifiedMapping;
-      try {
-        unifiedMapping = JSON.parse(cleanText);
-        // Validate the mapping structure
-        if (!unifiedMapping.unified_schema || !unifiedMapping.mappings) {
-          throw new Error('Invalid mapping structure');
-        }
-        console.log('Parsed Unified Mapping:', unifiedMapping);
-        
-        // Create a reverse mapping from unified names back to original names
-        const reverseMapping = {};
-        Object.entries(unifiedMapping.mappings).forEach(([fileName, mapping]) => {
-          Object.entries(mapping).forEach(([originalCol, unifiedCol]) => {
-            reverseMapping[unifiedCol] = originalCol;
-          });
-        });
-        
-      } catch (parseError) {
-        console.error('Error parsing Gemini response:', parseError);
-        console.error('Raw response:', cleanText);
-        setErrorMessage('Error processing column mappings. Please try again.');
-        return;
-      }
+          }))
 
       // Get all selected unified column names
       const selectedUnifiedColumns = new Set();
       Object.entries(unifiedMapping.mappings).forEach(([fileName, mapping]) => {
         Object.entries(mapping).forEach(([oldCol, newCol]) => {
-          if (selectedColumns[oldCol]) {
+          if (selectedColumns[newCol]) {
             selectedUnifiedColumns.add(newCol);
           }
         });
@@ -223,8 +224,8 @@ function App() {
           
           // Apply the mapping to transform column names
           Object.entries(fileMapping).forEach(([oldCol, newCol]) => {
-            // Check if the original column is selected
-            if (selectedColumns[oldCol]) {
+            // Check if the unified column is selected
+            if (selectedColumns[newCol]) {
               newRow[newCol] = row[oldCol] || ''
             }
           })
@@ -255,14 +256,16 @@ function App() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      
-    } catch (error) {
-      console.error('Error getting unified column mappings:', error);
-      setErrorMessage('Error communicating with AI. Please check your API key configuration.');
-    }
   }
 
   const mergeAndDownloadMaximalCSV = async () => {
+    // Use the unified mapping that was created during compile
+    const unifiedMapping = window.unifiedMapping;
+    if (!unifiedMapping) {
+      setErrorMessage('Please compile files first to generate unified schema.');
+      return;
+    }
+
     const csvFiles = files.filter(file => file.type === "text/csv")
     
     // Parse all CSV files and collect their data
@@ -271,67 +274,14 @@ function App() {
         Papa.parse(file, {
           header: true,
           complete: (results) => {
-            const fileColumns = results.meta.fields || []
-            // Get sample data for each column
-            const columnSamples = fileColumns.map(col => ({
-              name: col,
-              sample: results.data.length > 0 ? results.data[0][col] : null
-            }))
-            
             resolve({
               fileName: file.name,
-              columns: columnSamples,
               data: results.data
             });
           }
         })
       })
-    }))
-
-    // Prepare data for single Gemini API call
-    const allColumnsData = allFileData.map(fileData => ({
-      fileName: fileData.fileName,
-      columns: fileData.columns
-    }));
-
-    // Make single API call to Gemini with all file data
-    const model = "gemini-2.5-flash";
-    const prompt = `Given these multiple CSV files with their columns and sample values:
-      ${JSON.stringify(allColumnsData, null, 2)}
-      
-      Create a unified schema that merges all these files for MAXIMAL data inclusion. Output only a JSON string with:
-      1. "unified_schema": Array of unified column names and types (include ALL possible columns)
-      2. "mappings": Object where each key is a filename, and the value maps original column names to unified names as { "original": "unified" }
-      
-      Important: Include ALL columns from ALL files in the unified schema, even if they only exist in one file. 
-      Merge functionally identical columns (like "email" and "Email" or "phone" and "PhoneNumber") into unified names.
-      The goal is to preserve ALL data while creating a consistent schema.`;
-
-    try {
-      const result = await genAI.models.generateContent({
-        model: model,
-        contents: prompt,
-      });
-      
-      const responseText = result.text;
-      console.log('Gemini Maximal Response:', responseText);
-      const cleanText = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim()
-      console.log('Cleaned maximal response:', cleanText)
-      
-      let unifiedMapping;
-      try {
-        unifiedMapping = JSON.parse(cleanText);
-        // Validate the mapping structure
-        if (!unifiedMapping.unified_schema || !unifiedMapping.mappings) {
-          throw new Error('Invalid mapping structure');
-        }
-        console.log('Parsed Maximal Unified Mapping:', unifiedMapping);
-      } catch (parseError) {
-        console.error('Error parsing Gemini response:', parseError);
-        console.error('Raw response:', cleanText);
-        setErrorMessage('Error processing column mappings. Please try again.');
-        return;
-      }
+          }))
 
       // Get all unified column names
       const unifiedColumnNames = unifiedMapping.unified_schema.map(col => col.name || col);
@@ -376,11 +326,6 @@ function App() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-    } catch (error) {
-      console.error('Error getting unified column mappings for maximal data:', error);
-      setErrorMessage('Error communicating with AI. Please check your API key configuration.');
-    }
   }
 
   return (
