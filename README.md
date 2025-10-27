@@ -8,8 +8,3 @@ Quick tutorial to run:
 
   cd website
   npm start
-
-
-
-TODO:
-Add support for SQL, mongodb
